@@ -1,0 +1,29 @@
+//kage:unit pixels
+package main
+
+var Time float
+
+func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
+	texColor := imageSrc0At(srcPos)
+	if texColor.a == 0 {
+		return texColor
+	}
+
+	// Create a moving scanline
+	// Speed: 60 pixels per second
+	scanPos := mod(Time*60.0, imageDstSize().y)
+	
+	// Distance from the current pixel to the scanline
+	dist := abs(dstPos.y - scanPos)
+	
+	// Add a cyan tint if within the scanline width (10 pixels)
+	if dist < 10.0 {
+		strength := 1.0 - (dist / 10.0)
+		// Add cyan (Green + Blue)
+		return texColor + vec4(0.0, 0.5*strength, 0.8*strength, 0.0)*texColor.a
+	}
+
+	// Slight pulsing tint for the whole body to show "active" status
+	pulse := (sin(Time*5.0) + 1.0) * 0.1
+	return texColor + vec4(0.0, pulse, pulse*1.5, 0.0)*texColor.a
+}

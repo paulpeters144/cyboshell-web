@@ -1,0 +1,83 @@
+package main
+
+// Uniforms
+var Time float
+var Origin vec2
+var Size vec2 // Width, Height
+
+func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
+	// Normalized pixel coordinates (from -1 to 1)
+	// position is in screen pixels. Origin is center of effect.
+	// We want uv to be (-1, -1) to (1, 1) over the Size area.
+	
+	diff := position.xy - Origin
+	// Assuming Size is the full diameter/box size
+	uv := diff / (Size * 0.5) 
+	
+	dist := length(uv)
+	
+	// Discard outside circle
+	if dist > 1.0 {
+		return vec4(0)
+	}
+
+	// Apply Global Rotation
+	// Rotate the entire coordinate system over time
+	rotSpeed := 5.0
+	angle := atan2(uv.y, uv.x) + Time*rotSpeed
+
+	// Colors
+	// Green 500 (Core)
+	cGreenCore := vec3(0.298, 0.803, 0.313)
+	// Green 400 (Outer/Glow)
+	cGreenLight := vec3(0.505, 0.78, 0.517)
+	// Yellow 800 (Energy)
+	cYellow := vec3(0.988, 0.8, 0.153)
+
+	// 1. Central bright core
+	// Exponential falloff
+	coreIntensity := exp(-dist * 4.0)
+	
+	// 2. Rotating Rays/Star shape
+	// 5-pointed star rotating? Or just rays.
+	// sin(angle * N) -> N determines number of rays
+	nRays := 8.0
+	rays := sin(angle*nRays)
+	// Sharpen rays
+	rays = smoothstep(0.0, 1.0, rays)
+	// Mask rays to fade out at edges and center
+	rays *= smoothstep(1.0, 0.5, dist) * smoothstep(0.0, 0.4, dist)
+	
+	// 3. Yellow Swirls/Arcs
+	// Spirals: angle + dist*factor
+	spiral := sin(angle*3.0 + dist*10.0)
+	spiral = smoothstep(0.8, 1.0, spiral) // Thin lines
+	spiral *= smoothstep(0.8, 0.4, dist) // Fade outer
+	
+	// 4. Ambient Glow
+	ambientGlow := exp(-dist * 2.0) * 0.4
+
+	// Composition
+	
+	// Base is mostly transparent, glowing
+	finalColor := cGreenCore * coreIntensity * 2.0
+	finalColor += cGreenLight * rays * 0.8
+	finalColor += cGreenLight * ambientGlow
+	finalColor += cYellow * spiral * 1.5
+
+	// Global alpha fade at edge of circle
+	edgeFade := smoothstep(1.0, 0.8, dist)
+	
+	// Calculate alpha based on brightness
+	alpha := max(max(finalColor.r, finalColor.g), finalColor.b)
+	alpha *= edgeFade
+	
+	// Clamp alpha
+	alpha = clamp(alpha, 0.0, 1.0)
+
+	// Return premultiplied alpha if needed, but usually Ebiten handles straight alpha in shaders if configured?
+	// Ebiten DrawRectShader expects non-premultiplied usually, but let's check.
+	// Actually, usually it's best to output vec4(rgb * alpha, alpha).
+	
+	return vec4(finalColor * alpha, alpha) * color // Apply input color (like global fade)
+}
